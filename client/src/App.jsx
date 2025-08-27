@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 
-import { Home, CreatePost,} from "./pages";
+import { Home, CreatePost, Login, Signup,} from "./pages";
 
 const App = () => (
   <BrowserRouter>
@@ -11,6 +11,8 @@ const App = () => (
         
         <Route path="/" element={< Home/>} />
         <Route path="/create-post" element={<CreatePost />} />
+        <Route path="/login" element = {<Login/>}/>
+        <Route path="/signup" element= {<Signup/>}/>
       </Routes>
     </main>
   </BrowserRouter>
