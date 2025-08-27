@@ -1,141 +1,113 @@
-import { v2 as cloudinary } from "cloudinary";
 import Post from "../mongodb/models/post.js";
+import mongoose from "mongoose";
 
-// =============================
-// Cloudinary Config
-// =============================
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// =============================
-// @desc    Get all posts
-// @route   GET /api/posts
-// =============================
+// --- Get All Posts ---
 export const getAllPosts = async (req, res) => {
   try {
-    const posts = await Post.find({}).sort({ _id: -1 });
+    const posts = await Post.find({})
+      .populate("author", "username")
+      .sort({ _id: -1 });
     res.status(200).json({ success: true, data: posts });
-  } catch (err) {
-    console.error("❌ Error fetching posts:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Fetching posts failed, please try again",
-    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Fetching posts failed, please try again",
+      });
   }
 };
 
-// =============================
-// @desc    Get single post by ID
-// @route   GET /api/posts/:id
-// =============================
-export const getPostById = async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.id);
-    if (!post)
-      return res
-        .status(404)
-        .json({ success: false, message: "Post not found" });
-
-    res.status(200).json({ success: true, data: post });
-  } catch (err) {
-    console.error("❌ Error fetching single post:", err.message);
-    res.status(500).json({ success: false, message: "Error fetching post" });
-  }
-};
-
-// =============================
-// @desc    Create new post
-// @route   POST /api/posts
-// =============================
+// --- Create a Post (Corrected) ---
 export const createPost = async (req, res) => {
   try {
+    // The 'name' and 'photo' come from the form state.
+    // The 'userId' is attached by the auth middleware.
     const { name, prompt, photo } = req.body;
+    const userId = req.userId; // Get the user ID from the middleware
 
-    if (!name || !prompt || !photo) {
+    // 1. Check if userId exists (user is logged in)
+    if (!userId) {
       return res
-        .status(400)
-        .json({ success: false, message: "Missing required fields" });
+        .status(401)
+        .json({
+          success: false,
+          message: "You must be logged in to create a post.",
+        });
     }
 
-    const photoUrl = await cloudinary.uploader.upload(photo, {
-      folder: "ai_images",
-      resource_type: "image",
-    });
-
+    // 2. Create the new post, making sure to include the 'author' field
     const newPost = await Post.create({
       name,
       prompt,
-      photo: photoUrl.secure_url,
-      cloudinary_id: photoUrl.public_id,
+      photo,
+      author: userId, // Assign the logged-in user's ID to the author field
     });
 
     res.status(201).json({ success: true, data: newPost });
-  } catch (err) {
-    console.error("❌ Error creating post:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Unable to create a post, please try again",
-    });
-  }
-};
-
-// =============================
-// @desc    Update post
-// @route   PUT /api/posts/:id
-// =============================
-export const updatePost = async (req, res) => {
-  try {
-    const { name, prompt, photo } = req.body;
-
-    let updateData = { name, prompt };
-
-    if (photo) {
-      const photoUrl = await cloudinary.uploader.upload(photo, {
-        folder: "ai_images",
-      });
-      updateData.photo = photoUrl.secure_url;
-      updateData.cloudinary_id = photoUrl.public_id;
-    }
-
-    const updatedPost = await Post.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    );
-
-    res.status(200).json({ success: true, data: updatedPost });
-  } catch (err) {
-    console.error("❌ Error updating post:", err.message);
-    res.status(500).json({ success: false, message: "Error updating post" });
-  }
-};
-
-// =============================
-// @desc    Delete post
-// @route   DELETE /api/posts/:id
-// =============================
-export const deletePost = async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.id);
-    if (!post)
-      return res
-        .status(404)
-        .json({ success: false, message: "Post not found" });
-
-    if (post.cloudinary_id) {
-      await cloudinary.uploader.destroy(post.cloudinary_id);
-    }
-
-    await Post.findByIdAndDelete(req.params.id);
-
+  } catch (error) {
+    // Add detailed error logging to the console for easier debugging
+    console.error("CREATE POST ERROR:", error);
     res
-      .status(200)
-      .json({ success: true, message: "Post deleted successfully" });
-  } catch (err) {
-    console.error("❌ Error deleting post:", err.message);
-    res.status(500).json({ success: false, message: "Error deleting post" });
+      .status(500)
+      .json({
+        success: false,
+        message: "Unable to create a post, please try again",
+      });
+  }
+};
+
+// --- Delete a Post ---
+export const deletePost = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(id))
+    return res.status(404).send(`No post with id: ${id}`);
+
+  try {
+    const post = await Post.findById(id);
+    if (!post) return res.status(404).send(`No post with id: ${id}`);
+
+    if (post.author.toString() !== userId) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to delete this post." });
+    }
+
+    await Post.findByIdAndDelete(id);
+    res.json({ message: "Post deleted successfully." });
+  } catch (error) {
+    console.error("DELETE POST ERROR:", error);
+    res.status(500).json({ message: "Error deleting post." });
+  }
+};
+
+// --- Like a Post ---
+export const likePost = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.userId;
+
+  if (!userId) return res.status(401).json({ message: "Unauthenticated" });
+  if (!mongoose.Types.ObjectId.isValid(id))
+    return res.status(404).send(`No post with id: ${id}`);
+
+  try {
+    const post = await Post.findById(id);
+    const index = post.likes.findIndex((id) => id === String(userId));
+
+    if (index === -1) {
+      post.likes.push(userId);
+    } else {
+      post.likes = post.likes.filter((id) => id !== String(userId));
+    }
+
+    const updatedPost = await Post.findByIdAndUpdate(id, post, { new: true });
+    res.status(200).json(updatedPost);
+  } catch (error) {
+    console.error("LIKE POST ERROR:", error);
+    res
+      .status(500)
+      .json({ message: "Something went wrong with liking the post." });
   }
 };

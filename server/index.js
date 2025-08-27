@@ -5,18 +5,19 @@ import cors from "cors";
 import connectDB from "./mongodb/connect.js";
 import postRoutes from "./routes/postRoutes.js";
 import dalleRoutes from "./routes/dalleRoutes.js";
+import authRoutes from "./routes/authRoutes.js"; // Import the new auth routes
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 8080; // ✅ PORT from env OR fallback
+const PORT = process.env.PORT || 8080;
 
-// ✅ CORS setup (for local dev only)
+// CORS setup
 app.use(
   cors({
     origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], // Added PATCH and DELETE
+    allowedHeaders: ["Content-Type", "Authorization"], // Added Authorization header
     credentials: true,
   })
 );
@@ -24,20 +25,21 @@ app.use(
 app.options("*", cors());
 app.use(express.json({ limit: "50mb" }));
 
-// ✅ Routes
+// API Routes
 app.use("/api/v1/post", postRoutes);
 app.use("/api/v1/dalle", dalleRoutes);
+app.use("/api/v1/auth", authRoutes); // Use the new auth routes
 
-// ✅ Root route for quick health check
+// Root route for health check
 app.get("/", (req, res) => {
-  res.status(200).json({ message: "Hello from DALL·E backend!" });
+  res.status(200).json({ message: "Hello from the AI Image Gallery backend!" });
 });
 
-// ✅ Start server with debugging logs
+// Start server logic
 const startServer = async () => {
   try {
     console.log("🔄 Connecting to MongoDB...");
-    await connectDB();
+    await connectDB(process.env.MONGODB_URL); // Pass the connection string
     console.log("✅ MongoDB connected");
 
     app.listen(PORT, () => {
