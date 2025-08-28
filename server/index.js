@@ -1,50 +1,59 @@
 import express from "express";
 import * as dotenv from "dotenv";
 import cors from "cors";
+import helmet from "helmet"; // For security headers
+import rateLimit from "express-rate-limit"; // For rate limiting
 
 import connectDB from "./mongodb/connect.js";
 import postRoutes from "./routes/postRoutes.js";
 import dalleRoutes from "./routes/dalleRoutes.js";
-import authRoutes from "./routes/authRoutes.js"; // Import the new auth routes
+import authRoutes from "./routes/authRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js"; // Import the new admin routes
+import userRoutes from "./routes/userRoutes.js"; // 
+import { errorHandler } from "./middleware/errorMiddleware.js"; // Centralized error handler
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// CORS setup
-app.use(
-  cors({
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], // Added PATCH and DELETE
-    allowedHeaders: ["Content-Type", "Authorization"], // Added Authorization header
-    credentials: true,
-  })
-);
-
-app.options("*", cors());
+// --- Security Middleware ---
+app.use(helmet()); // Set security HTTP headers
+app.use(cors()); // Enable CORS
 app.use(express.json({ limit: "50mb" }));
 
-// API Routes
+// --- Rate Limiting ---
+// Apply to all API routes to prevent abuse
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/", apiLimiter);
+
+// --- API Routes ---
 app.use("/api/v1/post", postRoutes);
 app.use("/api/v1/dalle", dalleRoutes);
-app.use("/api/v1/auth", authRoutes); // Use the new auth routes
-
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/admin", adminRoutes); // Use the new admin routes
+app.use("/api/v1/users", userRoutes); // Use the new user routes
 // Root route for health check
 app.get("/", (req, res) => {
-  res.status(200).json({ message: "Hello from the AI Image Gallery backend!" });
+  res.status(200).json({ message: "API is healthy!" });
 });
+
+// --- Centralized Error Handler ---
+// This MUST be the last piece of middleware you use
+app.use(errorHandler);
 
 // Start server logic
 const startServer = async () => {
   try {
-    console.log("🔄 Connecting to MongoDB...");
-    await connectDB(process.env.MONGODB_URL); // Pass the connection string
-    console.log("✅ MongoDB connected");
-
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running at: http://localhost:${PORT}`);
-    });
+    await connectDB(process.env.MONGODB_URL);
+    app.listen(PORT, () =>
+      console.log(`🚀 Server running at: http://localhost:${PORT}`)
+    );
   } catch (error) {
     console.error("❌ Server failed to start:", error.message);
   }

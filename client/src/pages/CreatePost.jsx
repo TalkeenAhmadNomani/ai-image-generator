@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { preview } from "../assets";
 import { getRandomPrompt } from "../utils";
 import { FormField, Loader } from "../components";
@@ -8,15 +9,18 @@ import * as api from "../api";
 
 const CreatePost = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [form, setForm] = useState({ prompt: "", photo: "" });
+  const { user, updateUserCredits } = useAuth();
+  const [form, setForm] = useState({
+    prompt: "",
+    photo: "",
+    cloudinaryPublicId: "", // Add this to store the Cloudinary ID
+  });
   const [generatingImg, setGeneratingImg] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Protect the route: if user is not logged in, redirect to login
   useEffect(() => {
     if (!user) {
-      alert("You must be logged in to create a post.");
+      toast.error("You must be logged in to create a post.");
       navigate("/login");
     }
   }, [user, navigate]);
@@ -34,17 +38,31 @@ const CreatePost = () => {
       try {
         setGeneratingImg(true);
         const { data } = await api.generateImage({ prompt: form.prompt });
-        setForm({ ...form, photo: `data:image/jpeg;base64,${data.photo}` });
+
+        // --- THIS IS THE FIX ---
+        // The 'photo' from the API is now a direct URL.
+        // We also receive the cloudinaryPublicId.
+        setForm({
+          ...form,
+          photo: data.photo,
+          cloudinaryPublicId: data.cloudinaryPublicId,
+        });
+
+        // Update credits in the global context
+        updateUserCredits(data.credits);
+        toast.success("Image generated successfully!");
       } catch (err) {
-        alert(
-          "Error generating image: " +
-            (err.response?.data?.message || err.message)
-        );
+        if (err.response && err.response.status === 402) {
+          toast.error("You are out of credits!");
+          navigate("/pricing");
+        } else {
+          toast.error(err.response?.data?.message || "Error generating image.");
+        }
       } finally {
         setGeneratingImg(false);
       }
     } else {
-      alert("Please provide a proper prompt");
+      toast.error("Please provide a proper prompt.");
     }
   };
 
@@ -53,24 +71,23 @@ const CreatePost = () => {
     if (form.prompt && form.photo) {
       setLoading(true);
       try {
-        // We get the name and userId from the logged-in user context
+        // We now send the full form, including the cloudinaryPublicId
         const postData = {
-          ...form,
-          name: user.result.username,
-          userId: user.result._id,
+          name: user.result.username, // Name is from the logged-in user
+          prompt: form.prompt,
+          photo: form.photo,
+          cloudinaryPublicId: form.cloudinaryPublicId,
         };
         await api.createPost(postData);
-        alert("Success");
+        toast.success("Post shared successfully!");
         navigate("/");
       } catch (err) {
-        alert(
-          "Error sharing post: " + (err.response?.data?.message || err.message)
-        );
+        toast.error(err.response?.data?.message || "Error sharing post.");
       } finally {
         setLoading(false);
       }
     } else {
-      alert("Please generate an image first");
+      toast.error("Please generate an image first.");
     }
   };
 

@@ -14,9 +14,19 @@ const Navbar = () => {
       <div className="flex items-center gap-4">
         {user?.result ? (
           <>
-            <span className="text-gray-700 hidden sm:block">
-              Welcome, {user.result.username}!
-            </span>
+            {/* Credits Display */}
+            <div className="font-semibold text-gray-700 bg-gray-100 px-3 py-1 rounded-md">
+              Credits: {user.result.credits}
+            </div>
+
+            {/* My Profile Link */}
+            <Link
+              to={`/profile/${user.result._id}`}
+              className="font-inter font-medium text-gray-700 hover:text-[#6469ff]"
+            >
+              My Profile
+            </Link>
+
             <Link
               to="/create-post"
               className="font-inter font-medium bg-[#6469ff] text-white px-4 py-2 rounded-md"

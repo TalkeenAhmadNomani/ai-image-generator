@@ -25,10 +25,13 @@ export const addComment = (id, commentData) =>
   API.post(`/post/${id}/comment`, commentData);
 // Add this to client/src/api/index.js
 export const fetchCommentsForPost = (id) => API.get(`/post/${id}/comments`);
+export const fetchPostById = (id) => API.get(`/post/${id}`); 
 
 // --- Auth Routes ---
 export const signIn = (formData) => API.post("/auth/login", formData);
 export const signUp = (formData) => API.post("/auth/signup", formData);
-
+// --- User Profile Routes (NEW) ---
+export const fetchUserProfile = (id) => API.get(`/users/${id}`);
+export const fetchPostsByUser = (id) => API.get(`/users/${id}/posts`);
 // --- DALL-E Route ---
 export const generateImage = (promptData) => API.post("/dalle", promptData);

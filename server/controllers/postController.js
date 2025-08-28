@@ -1,113 +1,114 @@
-import Post from "../mongodb/models/post.js";
+import { postService } from "../services/postService.js";
 import mongoose from "mongoose";
 
-// --- Get All Posts ---
-export const getAllPosts = async (req, res) => {
+// Get all posts with pagination
+export const getAllPosts = async (req, res, next) => {
   try {
-    const posts = await Post.find({})
-      .populate("author", "username")
-      .sort({ _id: -1 });
-    res.status(200).json({ success: true, data: posts });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12; // 12 posts per page
+    const data = await postService.getPosts(page, limit);
+    res.status(200).json({ success: true, data });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Fetching posts failed, please try again",
-      });
+    next(error); // Pass error to the centralized error handler
   }
 };
 
-// --- Create a Post (Corrected) ---
-export const createPost = async (req, res) => {
+// Create a new post
+export const createPost = async (req, res, next) => {
   try {
-    // The 'name' and 'photo' come from the form state.
-    // The 'userId' is attached by the auth middleware.
-    const { name, prompt, photo } = req.body;
-    const userId = req.userId; // Get the user ID from the middleware
-
-    // 1. Check if userId exists (user is logged in)
-    if (!userId) {
-      return res
-        .status(401)
-        .json({
-          success: false,
-          message: "You must be logged in to create a post.",
-        });
-    }
-
-    // 2. Create the new post, making sure to include the 'author' field
-    const newPost = await Post.create({
-      name,
-      prompt,
-      photo,
-      author: userId, // Assign the logged-in user's ID to the author field
-    });
-
+    const postData = req.body;
+    const userId = req.userId;
+    const newPost = await postService.createPost(postData, userId);
     res.status(201).json({ success: true, data: newPost });
   } catch (error) {
-    // Add detailed error logging to the console for easier debugging
-    console.error("CREATE POST ERROR:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Unable to create a post, please try again",
-      });
+    next(error);
   }
 };
 
-// --- Delete a Post ---
-export const deletePost = async (req, res) => {
-  const { id } = req.params;
-  const userId = req.userId;
-
-  if (!mongoose.Types.ObjectId.isValid(id))
-    return res.status(404).send(`No post with id: ${id}`);
-
+// Delete a post
+export const deletePost = async (req, res, next) => {
   try {
-    const post = await Post.findById(id);
-    if (!post) return res.status(404).send(`No post with id: ${id}`);
+    const { id } = req.params;
+    const userId = req.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(404);
+      throw new Error("Post not found");
+    }
+
+    const post = await postService.findPostById(id);
+    if (!post) {
+      res.status(404);
+      throw new Error("Post not found");
+    }
 
     if (post.author.toString() !== userId) {
-      return res
-        .status(403)
-        .json({ message: "You are not authorized to delete this post." });
+      res.status(403);
+      throw new Error("User not authorized to delete this post");
     }
 
-    await Post.findByIdAndDelete(id);
+    await postService.deletePostById(id);
     res.json({ message: "Post deleted successfully." });
   } catch (error) {
-    console.error("DELETE POST ERROR:", error);
-    res.status(500).json({ message: "Error deleting post." });
+    next(error);
   }
 };
 
-// --- Like a Post ---
-export const likePost = async (req, res) => {
-  const { id } = req.params;
-  const userId = req.userId;
-
-  if (!userId) return res.status(401).json({ message: "Unauthenticated" });
-  if (!mongoose.Types.ObjectId.isValid(id))
-    return res.status(404).send(`No post with id: ${id}`);
-
+// Like a post
+export const likePost = async (req, res, next) => {
   try {
-    const post = await Post.findById(id);
-    const index = post.likes.findIndex((id) => id === String(userId));
+    const { id } = req.params;
+    const userId = req.userId;
 
-    if (index === -1) {
-      post.likes.push(userId);
-    } else {
-      post.likes = post.likes.filter((id) => id !== String(userId));
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(404);
+      throw new Error("Post not found");
     }
 
-    const updatedPost = await Post.findByIdAndUpdate(id, post, { new: true });
+    const post = await postService.findPostById(id);
+    if (!post) {
+      res.status(404);
+      throw new Error("Post not found");
+    }
+
+    const updatedPost = await postService.toggleLikePost(post, userId);
     res.status(200).json(updatedPost);
   } catch (error) {
-    console.error("LIKE POST ERROR:", error);
-    res
-      .status(500)
-      .json({ message: "Something went wrong with liking the post." });
+    next(error);
+  }
+};
+// --- Get a Single Post by ID (New Function) ---
+export const getPostById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(404);
+      throw new Error("Post not found");
+    }
+
+    // You will need to add a findPostById function to your postService
+    const post = await postService.findPostById(id);
+
+    if (!post) {
+      res.status(404);
+      throw new Error("Post not found");
+    }
+
+    // Populate author details and also populate the comments with their author's username
+    await post.populate([
+      { path: "author", select: "username" },
+      {
+        path: "comments",
+        populate: {
+          path: "author",
+          select: "username",
+        },
+      },
+    ]);
+
+    res.status(200).json(post);
+  } catch (error) {
+    next(error);
   }
 };
