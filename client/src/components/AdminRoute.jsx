@@ -1,21 +1,26 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { Loader } from "./";
 
 const AdminRoute = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
-  if (!user) {
-    // If not logged in at all, redirect to login
-    return <Navigate to="/login" />;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <Loader />
+      </div>
+    );
   }
 
-  if (user.result.role !== "admin") {
-    // If logged in but not an admin, redirect to home
-    return <Navigate to="/" />;
+  if (!user || user.result.role !== "admin") {
+    // Redirect them to the /login page, but save the current location they were
+    // trying to go to. This allows us to send them back after they log in.
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If logged in and is an admin, render the child component (the dashboard)
   return children;
 };
 

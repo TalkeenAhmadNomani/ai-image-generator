@@ -19,12 +19,19 @@ export const signup = async (req, res) => {
     // 2. Hash the password for security
     // We never store plain text passwords. bcrypt creates a secure hash.
     const hashedPassword = await bcrypt.hash(password, 12);
+    // THIS IS THE KEY PART
+    let role = "user";
+    if (email === "admin@gmail.com") {
+      role = "admin";
+    }
 
     // 3. Create the new user in the database
     const newUser = await User.create({
       username,
       email,
       password: hashedPassword,
+      role, // The assigned role is saved here
+      credits: 100, // Assign initial credits
     });
 
     // 4. Send a success response
@@ -62,9 +69,15 @@ export const login = async (req, res) => {
     );
 
     // 4. Send back the token and user info
-    res
-      .status(200)
-      .json({ result: { _id: user._id, username: user.username }, token });
+    res.status(200).json({
+      result: {
+        _id: user._id,
+        username: user.username,
+        credits: user.credits,
+        role: user.role,
+      },
+      token,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Something went wrong during login." });

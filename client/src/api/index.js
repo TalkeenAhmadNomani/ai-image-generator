@@ -35,3 +35,9 @@ export const fetchUserProfile = (id) => API.get(`/users/${id}`);
 export const fetchPostsByUser = (id) => API.get(`/users/${id}/posts`);
 // --- DALL-E Route ---
 export const generateImage = (promptData) => API.post("/dalle", promptData);
+//admin route to getch stats
+export const getAdminStats = () => API.get("/admin/stats");
+export const getMostLikedPosts = () => API.get("/admin/posts/most-liked");
+export const getMostCommentedPosts = () =>
+  API.get("/admin/posts/most-commented");
+export const getPostStatsForChart = () => API.get("/admin/posts/chart-stats");
